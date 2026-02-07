@@ -1,6 +1,17 @@
-PROMPT_TEMPLATE = """
+import os
+
+from dotenv import load_dotenv
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from vectorstore import vector_db
+
+load_dotenv()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+SYSTEM_PROMPT = """
 CONTEXTO:
-{contexto}
+{context}
 
 REGRAS:
 - Responda somente com base no CONTEXTO.
@@ -20,10 +31,32 @@ Pergunta: "Você acha isso bom ou ruim?"
 Resposta: "Não tenho informações necessárias para responder sua pergunta."
 
 PERGUNTA DO USUÁRIO:
-{pergunta}
+{question}
 
 RESPONDA A "PERGUNTA DO USUÁRIO"
 """
 
 def search_prompt(question=None):
-    pass
+    llm = ChatOpenAI(
+        model="gpt-5-nano",
+        temperature=0,
+        openai_api_key=OPENAI_API_KEY
+    )
+
+    results = vector_db.similarity_search_with_score(question, k=10)
+
+    context = "\n\n".join([doc.page_content for doc, score in results])
+
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", SYSTEM_PROMPT),
+        ("human", question),
+    ])
+
+    chain = prompt_template | llm
+
+    response = chain.invoke({
+        "context": context,
+        "question": question,
+    })
+
+    return response.content
